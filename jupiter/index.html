@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="css/style.css" rel="stylesheet">
+    <title>jupiter</title>
+  </head>
+  <script src="js/lib/build/three.js"></script>
+  <body>
+    <div id="container"></div>
+  </body>
+  <script id="vertexShader" type="x-shader/x-vertex">
+      void main() {
+          gl_Position = vec4(position, 1.0);
+      }
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    uniform vec2 u_resolution;
+  	uniform float u_time;
+    uniform vec2 u_mouse;
+
+  	const float SIZE = 0.55;
+
+  	const int OCTAVES = 3;
+  	const int OCTAVESWARP = 12;
+
+  	const float SEED = 8.0;
+  	const float SEED2 = 30.0;
+
+  	const float PI = 3.14159265359;
+  	const float TAU = 6.28318530718;
+
+  	vec2 random(vec2 st, float seed)
+  	{
+  		st = vec2(
+  			dot(st, vec2(300.0, 100.0)),
+  			dot(st, vec2(100.0, 300.0))
+  		);
+
+  		return -1.0 + 2.0 * fract(sin(st) * seed);
+  	}
+
+  	float noise(vec2 st, float seed)
+  	{
+  		vec2 i = floor(st);
+  		vec2 f = fract(st);
+  		vec2 u = f * f * (3.0 - 2.0 * f);
+
+  		return mix(
+  			mix(
+  				dot(random(i + vec2(0.0,0.0), seed), f - vec2(0.0,0.0)),
+  				dot(random(i + vec2(1.0,0.0), seed), f - vec2(1.0,0.0)),
+  				u.x
+  			),
+  			mix(
+  				dot(random(i + vec2(0.0,1.0), seed), f - vec2(0.0,1.0)),
+  				dot(random(i + vec2(1.0,1.0), seed), f - vec2(1.0,1.0)),
+  				u.x
+  			),
+  			u.y
+  		);
+  	}
+
+  	float fbm(in vec2 st, float seed)
+  	{
+  		float value = 0.0;
+
+  		for (int i = OCTAVES; i > 0; i--) {
+  			value += noise(st, seed);
+  		}
+
+  		return value;
+  	}
+
+  	float fbm2(in vec2 st, float seed, float amplitude)
+  	{
+  		float value = 0.0;
+
+  		for (int i = 0; i < OCTAVESWARP; ++i) {
+  			value += amplitude * noise(st, seed);
+  			st *= 3.0;
+  			amplitude *= 0.25;
+  		}
+
+  		return value;
+  	}
+
+  	mat2 rotate2d(float angle)
+  	{
+  		return mat2(cos(angle), sin(angle), -sin(angle), cos(angle));
+  	}
+
+    float ease_in_out_cubic(float x) {
+    	float t=x; float b=0.; float c=1.; float d=1.;
+    	if ((t/=d/2.) < 1.) return c/2.*t*t*t + b;
+    	return c/2.*((t-=2.)*t*t + 2.) + b;
+    }
+
+    float ease_out_quint(float x) {
+    	float t=x; float b=0.; float c=1.; float d=1.;
+    	return c*((t=t/d-1.)*t*t*t*t + 1.) + b;
+    }
+
+  	void main()
+  	{
+  		vec2 uv = (gl_FragCoord.xy - u_resolution.xy) / u_resolution.y;
+
+  		// Migrate left/right
+  		uv.x += cos(u_time / 500.0);
+  		uv.y -= sin(u_time / 50.0);
+
+  		// Scale up
+  		uv /= SIZE;
+
+  		vec2 noiseuv = uv;
+
+  		// Migrate left/right
+  		noiseuv.x -= u_time / 100.0;
+  		noiseuv.y += u_time / 100.0;
+
+      float seedCos = sin(ease_out_quint(1.0 + u_mouse.x) * ease_out_quint(1.0 + u_mouse.y));
+
+  		float offsetVal = fbm(noiseuv, seedCos);
+
+  		// vec2 direction = normalize(vec2(1.0));
+      vec2 direction = normalize(1.0 + u_mouse);
+  		// direction = rotate2d(sin(offsetVal) * PI) * direction;
+      direction = rotate2d(sin(offsetVal) * PI) * direction;
+
+  		vec2 uvN = uv + direction * sin(u_time + u_mouse);
+  		vec2 uvN2 = uv + direction * sin(1.5 + u_time + u_mouse);
+
+  		float noiseVal = fbm2(uvN, SEED, 0.25);
+  		float noiseVal2 = fbm2(uvN2, SEED2, 0.25);
+
+  		vec3 color = vec3(noiseVal + noiseVal2);
+
+  		color.rg += noiseVal2;
+  		color.r += .11;
+  		color.gb += noiseVal;
+  		color += .61;
+
+  		gl_FragColor = vec4(color, 1.0);
+  	}
+  </script>
+  <script src="js/main.js"></script>
+</html>
